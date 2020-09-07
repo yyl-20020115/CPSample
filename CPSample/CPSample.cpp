@@ -8,76 +8,6 @@
 #include <ShlObj.h>
 #include <WinSock2.h>
 #define MAX_LOADSTRING 100
-wchar_t* EncodingConvert(const char* s) {
-    int sl = (int)strlen(s);
-    int wl = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s, sl, 0, 0);
-    wchar_t* w = (wchar_t*)malloc((wl + 1) * sizeof(wchar_t));
-    if (w != 0) {
-        int rl = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s, sl, w, wl);
-        if (rl != wl) {
-            //What?
-        }
-        w[wl] = L'\0';
-    }
-    return w;
-}
-//url: "ftp://192.168.1.103:2121/"
-//file: "test.txt"
-HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char* file_name) {
-    STRRET r = { 0 };
-    HRESULT hr = S_OK;
-    ULONG ret = 0, f = 0;
-    IShellFolder* desktop = 0;
-    IDataObject* fo = 0;
-    IShellFolder* ftp_root = 0;
-    IContextMenu* context_menu = 0;
-    IEnumIDList* pl = 0;
-    SHFILEINFO sfi = { 0 };
-    PITEMID_CHILD pc = 0;
-    PIDLIST_ABSOLUTE pidl = 0;
-    wchar_t* w_url = EncodingConvert(url);
-    wchar_t* w_file_name = EncodingConvert(file_name);
-    CMINVOKECOMMANDINFO cmd = { 0 };
-    cmd.cbSize = sizeof(cmd);
-    cmd.lpVerb = "copy";
-
-    if (S_OK != (hr = SHGetDesktopFolder(&desktop))) goto exit_me;
-    if (S_OK != (hr = SHParseDisplayName(w_url, NULL, &pidl, SFGAO_FOLDER, &ret))) goto exit_me;
-    if (S_OK != (hr = desktop->BindToObject(pidl, 0, IID_IShellFolder, (void**)&ftp_root))) goto exit_me;
-    if (S_OK != (hr = ftp_root->EnumObjects(hWnd, SHCONTF_NONFOLDERS | SHCONTF_FOLDERS, &pl))) goto exit_me;
-
-    while (S_OK == (hr = pl->Next(1, &pc, &f)))
-    {
-        memset(&r, 0, sizeof(r));
-        if (S_OK != (hr = ftp_root->GetDisplayNameOf(pc, SHGDN_NORMAL| SHGDN_FORPARSING, &r))) goto exit_me;
-        BOOL done = FALSE;
-        if (strstr(r.cStr,"ftp://")!=0) {
-            done = strstr(r.cStr, file_name) != 0;
-        }
-        else 
-        {
-            done = wcsstr(r.pOleStr, w_file_name) != 0;
-        }
-
-        if (done) 
-        {
-            LPCITEMIDLIST b[] = { pc };
-            if (S_OK != (hr = ftp_root->GetUIObjectOf(
-                hWnd, 1, b, IID_IContextMenu, NULL, (void**)&context_menu))) goto exit_me;
-            if (S_OK != (hr = context_menu->InvokeCommand(&cmd))) goto exit_me;
-            context_menu->Release();
-        }
-    }
-    hr = S_OK;
-
-exit_me:
-    if (ftp_root != 0) ftp_root->Release();
-    if (desktop != 0) desktop->Release();
-    if (w_url != 0) free(w_url);
-    if (w_file_name != 0) free(w_file_name);
-
-    return hr;
-}
 
 // 全局变量:
 HINSTANCE hInst;                                // 当前实例
@@ -118,6 +48,8 @@ void WriteAllToFile(const char* path, const char* message) {
         }
     }
 }
+
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
                      _In_ LPWSTR    lpCmdLine,
@@ -125,6 +57,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 {
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+
+    
+
 
 
 #if 1
@@ -134,6 +69,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     StartSocket();
     void * handle = start_loop(0);
 #endif
+
+
+
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_CPSAMPLE, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
@@ -230,7 +168,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
             case IDM_ABOUT:
 #if 1
-                FtpPutIntoClipboard(hWnd,"ftp://127.0.0.1:8989/","sample.txt");
+//                FtpPutIntoClipboard(hWnd,"ftp://127.0.0.1:8989/","sample.txt");
 #endif
                 break;
             case IDM_EXIT:

@@ -486,3 +486,5 @@ LIST:COMMD=[LIST], ARGS=[]
 
 226 Directory send OK.
 
+ERROR  :accept_failed or threaad exited
+
