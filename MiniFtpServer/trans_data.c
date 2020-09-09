@@ -16,7 +16,7 @@ ssize_t send_file_block(SOCKET out_fd, int in_fd, long long* offset, long long b
     if (offset != 0) {
         _lseeki64(in_fd, *offset, SEEK_SET);
     }
-    for (size_t i = 0; i < block_size; i+=sizeof(buffer)) {
+    for (ssize_t i = 0; i < block_size; i+=sizeof(buffer)) {
         r = _read(in_fd, buffer, sizeof(buffer));
         d = send(out_fd, buffer, r, 0);
         n += d;
@@ -95,12 +95,55 @@ void limit_curr_rate(Session_t* sess, int nbytes, int is_upload)
 }
 #endif
 
-typedef ssize_t (*send_data_function)(SOCKET out_socket,void* src, long long* offset, long long count);
+typedef int (*download_ptr)(const char* fn, SOCKET datafd, long long* offset, long long blocksize);
+static download_ptr _dp = 0;
+int SetDownloadDataPtr(download_ptr dp) {
+    _dp = dp;
+    return 0;
+}
+int GetDownloadPtr(download_ptr* pdp) {
+    if (pdp != 0) {
+        *pdp = _dp;
+    }
+    return 0;
+}
+typedef long long (*get_file_size_ptr)(const char* fn);
+static get_file_size_ptr _gfsp = 0;
+int SetGetFileSizePtr(get_file_size_ptr gfsp)
+{
+    _gfsp = gfsp;
+    return 0;
+}
+int GetGetFileSizePtr(get_file_size_ptr* pgfsp) {
+    if (pgfsp != 0)
+    {
+        *pgfsp = _gfsp;
+    }
+    return 0;
+}
+typedef char* (*get_list_ptr)(const char* fn, int list);
+static get_list_ptr _trcp = 0;
+int SetGetDirListPtr(get_list_ptr trcp)
+{
+    _trcp = trcp;
+    return 0;
+}
+int GetDirListPtr(get_list_ptr* ptrcp)
+{
+    if (ptrcp != 0) {
+        *ptrcp = _trcp;
+    }
+    return 0;
+}
 
-int provide_data_as_file(Session_t* session, unsigned long long filesize, send_data_function sdf, void* src) {
-    
-    if (sdf == 0) return EXIT_FAILURE;
 
+int fake_download_file(Session_t* session)
+{
+    if (_gfsp == 0 || _dp == 0)
+    {
+        ftp_reply(session, FTP_FILEFAIL, "Failed to open file.");
+        return EXIT_SUCCESS;
+    }
     session->is_translating_data = 1;
     {
         if (get_trans_data_fd(session) == 0)
@@ -108,9 +151,12 @@ int provide_data_as_file(Session_t* session, unsigned long long filesize, send_d
             ftp_reply(session, FTP_FILEFAIL, "Failed to open file.");
             return EXIT_SUCCESS;
         }
-
+        long long filesize = 0LL;
         long long offset = session->restart_pos;
-        
+        if (_gfsp != 0) {
+            filesize = _gfsp(session->args);
+        }
+
         char text[1024] = { 0 };
         _snprintf(text, sizeof(text),
             "Opening Binary mode data connection for %s (%llu bytes).",
@@ -126,7 +172,7 @@ int provide_data_as_file(Session_t* session, unsigned long long filesize, send_d
         {
             block_size = (nleft > kSize) ? kSize : nleft;
 
-            ssize_t nwrite = sdf(session->data_fd, src, &offset, block_size);
+            ssize_t nwrite = _dp(session->args, session->data_fd, &offset, block_size);
 
             if (session->is_receive_abor == 1)
             {
@@ -423,7 +469,7 @@ int trans_list(Session_t *session, int list)
     if(get_trans_data_fd(session) == 0)
         return EXIT_SUCCESS;
 
-    //给出150 Here comes the directory listing.
+    //50 Here comes the directory listing.
     ftp_reply(session, FTP_DATACONN, "Here comes the directory listing.");
 
     if(list == 1)
@@ -727,8 +773,21 @@ int closedir(DIR* d)
     return 0;
 }
 #endif
+
 static void trans_list_common(Session_t *session, int list)
 {
+    if (_trcp != 0) {
+        char buffer[4096] = { 0 };
+        GetCurrentDirectoryA(sizeof(buffer), buffer);
+        char* cp = _trcp(buffer,list);
+        if (cp != 0) {
+            //reply
+            writes(session->data_fd, cp);
+            //free list from caller
+            free(cp);
+        }
+        return;
+    }
     DIR *dir = opendir(".");
     if (dir == NULL) {
         exit_with_error("opendir");

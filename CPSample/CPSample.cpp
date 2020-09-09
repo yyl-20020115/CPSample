@@ -29,8 +29,6 @@ int StopSocket() {
     int r = WSACleanup();
     return r == 0;
 }
-extern "C" void* start_loop(int looping);
-extern "C" void exit_loop();
 
 void WriteAllToFile(const char* path, const char* message) {
     
@@ -67,7 +65,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     WriteAllToFile("sample.txt", "This is a sample file for miniftp server");   
     StartSocket();
-    void * handle = start_loop(0);
 #endif
 
 
@@ -96,11 +93,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
 #if 1
-    exit_loop();
-    if (handle != INVALID_HANDLE_VALUE) {
-        WaitForSingleObject(handle, INFINITE);
-        CloseHandle(handle);
-    }
     StopSocket();
 
     CoUninitialize();

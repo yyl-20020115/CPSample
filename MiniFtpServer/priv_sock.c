@@ -100,7 +100,7 @@ void priv_sock_close(Session_t *session)
 }
 int priv_sock_send_cmd(SOCKET fd, char cmd)
 {
-    int ret = writen(fd, &cmd, sizeof(cmd));
+    int ret = (int)writen(fd, &cmd, sizeof(cmd));
     if(ret != sizeof(cmd))
     {
         exit_with_error("priv_sock_send_cmd error\n");
@@ -112,7 +112,7 @@ int priv_sock_send_cmd(SOCKET fd, char cmd)
 }
 int priv_sock_recv_cmd(SOCKET fd, char* pres)
 {
-    int ret = readn(fd, pres, sizeof(char));
+    int ret = (int)readn(fd, pres, sizeof(char));
 
     if(ret == 0)
     {
@@ -131,7 +131,7 @@ int priv_sock_recv_cmd(SOCKET fd, char* pres)
 }
 int priv_sock_send_result(SOCKET fd, char res)
 {
-    int ret = writen(fd, &res, sizeof(res));
+    int ret = (int)writen(fd, &res, sizeof(res));
     if(ret != sizeof(res))
     {
         exit_with_error("priv_sock_send_result\n");
@@ -142,7 +142,7 @@ int priv_sock_send_result(SOCKET fd, char res)
 
 int priv_sock_recv_result(SOCKET fd, char* pres)
 {
-    int ret = readn(fd, pres, sizeof(char));
+    int ret = (int)readn(fd, pres, sizeof(char));
     if(ret != sizeof(char))
     {
         *pres = PRIV_SOCK_INVALID_RESULT;
@@ -154,7 +154,7 @@ int priv_sock_recv_result(SOCKET fd, char* pres)
 
 int priv_sock_send_int(SOCKET fd, int res)
 {
-    int ret = writen(fd, (char*)&res, sizeof(int));
+    int ret = (int)writen(fd, (char*)&res, sizeof(int));
     if(ret != sizeof(int))
     {
         exit_with_error("priv_sock_send_int error\n");
@@ -165,7 +165,7 @@ int priv_sock_send_int(SOCKET fd, int res)
 
 int priv_sock_recv_int(SOCKET fd, int* pres)
 {
-    int ret = readn(fd, pres, sizeof(int));
+    int ret = (int)readn(fd, pres, sizeof(int));
     if(ret != sizeof(int))
     {
         *pres = PRIV_SOCK_INVALID_RESULT;
@@ -182,7 +182,7 @@ int priv_sock_send_str(SOCKET fd, const char *buf, unsigned int len)
     {
         return PRIV_SOCK_OPERATION_FAILED;
     }
-    int ret = writen(fd, buf, len);
+    int ret = (int)writen(fd, buf, len);
     if(ret != (int)len)
     {
         exit_with_error("priv_sock_send_str error\n");
@@ -208,7 +208,7 @@ int priv_sock_recv_str(SOCKET fd, char *buf, unsigned int len)
         return PRIV_SOCK_OPERATION_FAILED;
     }
 
-    int ret = readn(fd, buf, recv_len);
+    int ret = (int)readn(fd, buf, recv_len);
     if (ret != (int)recv_len)
     {
         exit_with_error("priv_sock_recv_str error\n");
@@ -219,7 +219,7 @@ int priv_sock_recv_str(SOCKET fd, char *buf, unsigned int len)
 
 int priv_sock_send_fd(SOCKET sock_fd, SOCKET fd)
 {
-    int ret = writen(sock_fd, (char*)&fd, sizeof(SOCKET));
+    int ret = (int)writen(sock_fd, (char*)&fd, sizeof(SOCKET));
     if (ret != sizeof(SOCKET))
     {
         exit_with_error("priv_sock_send_fd error\n");
@@ -230,7 +230,7 @@ int priv_sock_send_fd(SOCKET sock_fd, SOCKET fd)
 
 int priv_sock_recv_fd(SOCKET sock_fd, SOCKET* pfd)
 {
-    int ret = readn(sock_fd, pfd, sizeof(SOCKET));
+    int ret = (int)readn(sock_fd, pfd, sizeof(SOCKET));
     if (ret != sizeof(SOCKET))
     {
         *pfd = PRIV_SOCK_INVALID_RESULT;

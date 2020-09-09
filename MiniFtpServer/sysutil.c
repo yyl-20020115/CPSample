@@ -476,7 +476,7 @@ ssize_t readline(SOCKET sockfd, void *buf, size_t maxsize)
     ptr = buf;
 
     while (nleft > 0) {
-        ret = recv_peek(sockfd, ptr, nleft);
+        ret = (int)recv_peek(sockfd, ptr, nleft);
 
         if(ret <= 0)
         {
@@ -489,7 +489,7 @@ ssize_t readline(SOCKET sockfd, void *buf, size_t maxsize)
         {
             if (ptr[i] == '\n')
             {
-                ret = readn(sockfd, ptr, i + 1);
+                ret = (int)readn(sockfd, ptr, i + 1);
                 if (ret != i + 1)
                 {
                     return -1;
@@ -500,7 +500,7 @@ ssize_t readline(SOCKET sockfd, void *buf, size_t maxsize)
                 return total;
             }
         } 
-        ret = readn(sockfd, ptr, nread);
+        ret = (int)readn(sockfd, ptr, nread);
         if(ret != nread)
         {
             return -1;

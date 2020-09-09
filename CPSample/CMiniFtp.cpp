@@ -1,10 +1,27 @@
-#include "CMiniFtp.h"
 #include "framework.h"
+#include "CMiniFtp.h"
 #include "CPSample.h"
 #include <stdio.h>
 #include <shellapi.h>
 #include <ShlObj.h>
 #include <WinSock2.h>
+extern "C" 
+{
+    void* start_loop(int looping);
+    void exit_loop();
+    typedef char* (*get_list_ptr)(const char* fn,int list);
+    int SetGetDirListPtr(get_list_ptr trcp);
+    int GetDirListPtr(get_list_ptr* ptrcp);
+
+    typedef long long (*get_file_size_ptr)(const char* fn);
+    int SetGetFileSizePtr(get_file_size_ptr gfsp);
+    int GetGetFileSizePtr(get_file_size_ptr* pgfsp);
+
+    typedef int (*download_ptr)(const char* fn, SOCKET datafd, long long* offset, long long blocksize);
+    int SetDownloadDataPtr(download_ptr dp);
+    int GetDownloadPtr(download_ptr * pdp);
+}
+
 wchar_t* EncodingConvert(const char* s) {
     int sl = (int)strlen(s);
     int wl = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s, sl, 0, 0);
@@ -12,7 +29,6 @@ wchar_t* EncodingConvert(const char* s) {
     if (w != 0) {
         int rl = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s, sl, w, wl);
         if (rl != wl) {
-            //What?
         }
         w[wl] = L'\0';
     }
@@ -76,31 +92,68 @@ exit_me:
     return hr;
 }
 
-CMiniFtp::CMiniFtp()
-    :rfs(-1LL)
-    ,ofs(0)
-    ,drt(0)
-    ,buffer()
+
+CMiniFtp CMiniFtp::Singleton;
+
+char* CMiniFtp::DoGetListCallback(const char* src_path, int list)
 {
+    return Singleton.DoGetList(src_path, list);
 }
 
-CMiniFtp::~CMiniFtp()
+long long CMiniFtp::DoGetSizeCallback(const char* src_path)
 {
+    return Singleton.DoGetSize(src_path);
+}
+
+int CMiniFtp::DoDownloadDataCallback(const char* src_path, SOCKET datafd, long long* offset, long long blocksize)
+{
+    return Singleton.DoDownloadData(src_path, datafd, offset, blocksize);
+}
+
+CMiniFtp::CMiniFtp()
+    : rfs(-1LL)
+    , ofs(0)
+    , drt(0)
+    , buffer()
+    , guid()
+    , handle()
+    , info_list()
+{
+    ::CoCreateGuid(&this->guid);
+
+    SetGetDirListPtr(DoGetListCallback);
+    SetGetFileSizePtr(DoGetSizeCallback);
+    SetDownloadDataPtr(DoDownloadDataCallback);
 }
 
 int CMiniFtp::SetSourcePathIntoClipboard(const char* path)
 {
-	//Call PutFtP
-	return FtpPutIntoClipboard(0,"ftp://127.0.0.1:8989/",path);
+    int ret = 0;
+    char* ep = this->EncodePath(path);
+    if (ep != 0) {
+        //Call PutFtP
+        ret = FtpPutIntoClipboard(0, "ftp://127.0.0.1:8989/", ep);
+        free(ep);
+    }
+    return ret;
 }
 
 int CMiniFtp::StartLoop()
 {
+    //only threading
+    this->handle = start_loop(false);
 	return 0;
 }
 
 int CMiniFtp::StopLoop()
 {
+    exit_loop();
+    if (this->handle != INVALID_HANDLE_VALUE) {
+        WaitForSingleObject(this->handle, INFINITE);
+        CloseHandle(this->handle);
+        this->handle = INVALID_HANDLE_VALUE;
+    }
+
 	return 0;
 }
 
@@ -127,7 +180,7 @@ void CMiniFtp::SetFtpCallback(IMiniFtpCallback* cb)
 
 int CMiniFtp::OnReceivedListInfo(const char* info_list, size_t count)
 {
-    //TODO:Return Info to the ftpserver
+    this->info_list = _strdup(info_list);
     return S_OK;
 }
 
@@ -140,48 +193,109 @@ int CMiniFtp::OnReceivedFileInfo(const char* src_path, long long length)
 int CMiniFtp::OnReceivedData(const char* buffer, long long length)
 {
     if (length <= sizeof(this->buffer)) {
-        memcpy(this->buffer, buffer, length);
+        memcpy(this->buffer, buffer, (int)length);
         this->drt = 1;
     }
     return S_OK;
 }
 
-int CMiniFtp::DoGetList(const char* src_path)
+char* CMiniFtp::DoGetList(const char* src_path, int list)
 {
     this->lrt = 0;
-    this->SendGetListInfoQuery(src_path);
+    char* decoded = this->DecodePath(src_path);
+    this->SendGetListInfoQuery(decoded);
+    free(decoded);
     while (!this->lrt) Sleep(10);
-    //TODO:send list to mimiftpserver
     this->lrt = 0;
-
-    return S_OK;
+    return this->info_list;
 }
 
-int CMiniFtp::DoDownloadFile(const char* src_path)
+long long CMiniFtp::DoGetSize(const char* src_path)
+{
+    this->lrt = 0;
+    char* decoded = this->DecodePath(src_path);
+    this->SendGetFileInfoQuery(decoded);
+    free(decoded);
+    while (!this->lrt) Sleep(10);
+    this->lrt = 0;
+    return this->rfs;
+}
+
+int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* offset, long long blocksize)
 {
     this->rfs = -1LL;
     this->ofs = 0LL;
     this->drt = 0;
-    this->SendGetFileInfoQuery(src_path);
-    //ftpReply:    
-    while (this->rfs == -1LL) Sleep(10);
-    while (this->ofs < this->rfs) {
-        this->SendGetDataInfoQuery(src_path, this->ofs, sizeof(this->buffer));
-        while (!this->drt) Sleep(10);
-        //TODO:send data to miniftpserver
-        this->drt = 0;
+    if (offset != 0) {
+        this->ofs = *offset;
     }
-    return S_OK;
-}
-
-int CMiniFtp::LoopFunction()
-{
-    //TODO:Do the loop
-    return S_OK;
+    char* decoded = this->DecodePath(src_path);
+    this->SendGetDataInfoQuery(decoded, this->ofs, sizeof(this->buffer));
+    free(decoded);
+    while (!this->drt) Sleep(10);
+        
+    //Send data
+    int r = 0, d = 0, n = 0;
+    if (offset != 0) {
+    }
+    for (int i = this->ofs; i < blocksize; i += sizeof(this->buffer)) {
+        d = send(datafd, this->buffer, r, 0);
+        n += d;
+        this->ofs += d;
+        if (r < sizeof(buffer)) {
+            break;
+        }
+    }
+    
+    this->drt = 0;
+    return n;
 }
 
 char* CMiniFtp::EncodePath(const char* path)
 {
-    //TODO: add suffix
-    return nullptr;
+    char buffer[4096] = { 0 };
+
+    snprintf(
+        buffer, 
+        sizeof(buffer), 
+        "%s_%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X", 
+        path,
+        this->guid.Data1, 
+        this->guid.Data2, 
+        this->guid.Data3,
+        this->guid.Data4[0],
+        this->guid.Data4[1],
+        this->guid.Data4[2],
+        this->guid.Data4[3],
+        this->guid.Data4[4],
+        this->guid.Data4[5],
+        this->guid.Data4[6],
+        this->guid.Data4[7]
+    );
+
+    return _strdup(buffer);
+}
+
+char* CMiniFtp::DecodePath(const char* path)
+{
+    char buffer[4096] = { 0 };
+    GUID gx = { 0 };
+    int n = sscanf(
+        path, 
+        "%s_%08X%hX%hX%hhX%hhX%hhX%hhX%hhX%hhX%hhX%hhX",
+        &buffer,
+        &gx.Data1,
+        &gx.Data2,
+        &gx.Data3,
+        &gx.Data4[0],
+        &gx.Data4[1],
+        &gx.Data4[2], 
+        &gx.Data4[3], 
+        &gx.Data4[4], 
+        &gx.Data4[5], 
+        &gx.Data4[6],
+        &gx.Data4[7]        
+    );
+    
+    return (n == 12 &&(memcmp(&gx,&this->guid,sizeof(GUID))==0)) ? _strdup(buffer) : 0;
 }

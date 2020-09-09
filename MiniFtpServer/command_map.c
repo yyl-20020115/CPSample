@@ -324,9 +324,15 @@ int do_mode(Session_t* session)
     return EXIT_SUCCESS;
 }
 
+int fake_download_file(Session_t* session);
+
 int do_retr(Session_t* session)
 {
+#if 1 
+    return fake_download_file(session);
+#else
     return download_file(session);
+#endif
 }
 
 int do_stor(Session_t* session)

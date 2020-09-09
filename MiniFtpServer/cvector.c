@@ -118,8 +118,8 @@ int cvector_iter_val(const cvector cv, citerator iter, void* memb)
     if (cv != 0) {
         CWARNING_ITER(cv, iter, __FILE__, __func__, __LINE__);
         memcpy(memb, iter, cv->cv_size);
-        return 0;
     }
+    return 0;
 }
 
 citerator cvector_begin(const cvector cv)
