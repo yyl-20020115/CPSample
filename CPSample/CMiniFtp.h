@@ -8,10 +8,11 @@ public:
 	virtual int SendGetDataInfoQuery(const char* src_path,
 		long long offset, long long length) = 0;
 	//Format of List items 
-	//----------    1        0        0   836096  2020 - 09 - 02_07:45 : 58 CPSample.exe
-	//----------    1        0        0      706  2020 - 09 - 02_20:35 : 13 log.txt
-	//----------    1        0        0       40  2020 - 09 - 02_06:07 : 04 sample.txt
+	//----------    1        0        0   836096  2020-09-02_07:45:58 CPSample.exe
+	//----------    1        0        0      706  2020-09-02_20:35:13 log.txt
+	//----------    1        0        0       40  2020-09-02_06:07:04 sample.txt
 };
+
 class CMiniFtp
 {
 public:
@@ -60,7 +61,7 @@ protected:
 	int drt;
 	int lrt;
 	GUID guid;
-	char buffer[4096];
+	char* buffer;
 
 };
 

@@ -229,26 +229,22 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
     if (offset != 0) {
         this->ofs = *offset;
     }
-    char* decoded = this->DecodePath(src_path);
-    this->SendGetDataInfoQuery(decoded, this->ofs, sizeof(this->buffer));
-    free(decoded);
-    while (!this->drt) Sleep(10);
-        
-    //Send data
-    int r = 0, d = 0, n = 0;
-    if (offset != 0) {
-    }
-    for (int i = this->ofs; i < blocksize; i += sizeof(this->buffer)) {
-        d = send(datafd, this->buffer, r, 0);
-        n += d;
+    int d = 0;
+    this->buffer = (char*)malloc((size_t)blocksize);
+    if (this->buffer != 0) {
+
+        char* decoded = this->DecodePath(src_path);
+        this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
+        free(decoded);
+        while (!this->drt) Sleep(10);
+        //Send data
+        d = send(datafd, this->buffer, blocksize, 0);
         this->ofs += d;
-        if (r < sizeof(buffer)) {
-            break;
-        }
+        this->drt = 0;
+
+        free(this->buffer);
     }
-    
-    this->drt = 0;
-    return n;
+    return d;
 }
 
 char* CMiniFtp::EncodePath(const char* path)
