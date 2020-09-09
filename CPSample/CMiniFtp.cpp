@@ -116,7 +116,7 @@ CMiniFtp::CMiniFtp()
     , drt(0)
     , buffer()
     , guid()
-    , handle()
+    , handle(INVALID_HANDLE_VALUE)
     , info_list()
 {
     ::CoCreateGuid(&this->guid);
@@ -130,25 +130,28 @@ int CMiniFtp::SetSourcePathIntoClipboard(const char* path)
 {
     int ret = 0;
     char* ep = this->EncodePath(path);
-    if (ep != 0) {
-        //Call PutFtP
-        ret = FtpPutIntoClipboard(0, "ftp://127.0.0.1:8989/", ep);
-        free(ep);
-    }
+    if (ep == 0) return 0;
+
+    //Call PutFtP
+    ret = FtpPutIntoClipboard(0, "ftp://127.0.0.1:8989/", ep);
+    free(ep);
+    
     return ret;
 }
 
 int CMiniFtp::StartLoop()
 {
-    //only threading
-    this->handle = start_loop(false);
+    if (this->handle == INVALID_HANDLE_VALUE) {
+        //only threading
+        this->handle = start_loop(false);
+    }
 	return 0;
 }
 
 int CMiniFtp::StopLoop()
 {
-    exit_loop();
     if (this->handle != INVALID_HANDLE_VALUE) {
+        exit_loop();
         WaitForSingleObject(this->handle, INFINITE);
         CloseHandle(this->handle);
         this->handle = INVALID_HANDLE_VALUE;
@@ -159,17 +162,17 @@ int CMiniFtp::StopLoop()
 
 int CMiniFtp::SendGetListInfoQuery(const char* src_path)
 {
-    return this->m_ftpcallback->SendGetListInfoQuery(src_path);
+    return this->m_ftpcallback == 0 ? 0 : this->m_ftpcallback->SendGetListInfoQuery(src_path);
 }
 
 int CMiniFtp::SendGetFileInfoQuery(const char* src_path)
 {
-    return this->m_ftpcallback->SendGetFileInfoQuery(src_path);;
+    return this->m_ftpcallback == 0 ? 0 : this->m_ftpcallback->SendGetFileInfoQuery(src_path);;
 }
 
 int CMiniFtp::SendGetDataInfoQuery(const char* src_path, long long offset, long long length)
 {
-    return this->m_ftpcallback->SendGetDataInfoQuery(src_path
+    return this->m_ftpcallback == 0 ? 0 :this->m_ftpcallback->SendGetDataInfoQuery(src_path
         ,offset,length);
 }
 
@@ -181,13 +184,13 @@ void CMiniFtp::SetFtpCallback(IMiniFtpCallback* cb)
 int CMiniFtp::OnReceivedListInfo(const char* info_list, size_t count)
 {
     this->info_list = _strdup(info_list);
-    return S_OK;
+    return 0;
 }
 
 int CMiniFtp::OnReceivedFileInfo(const char* src_path, long long length)
 {
     this->rfs = length;
-    return S_OK;
+    return 0;
 }
 
 int CMiniFtp::OnReceivedData(const char* buffer, long long length)
@@ -196,7 +199,7 @@ int CMiniFtp::OnReceivedData(const char* buffer, long long length)
         memcpy(this->buffer, buffer, (int)length);
         this->drt = 1;
     }
-    return S_OK;
+    return 0;
 }
 
 char* CMiniFtp::DoGetList(const char* src_path, int list)
@@ -204,6 +207,8 @@ char* CMiniFtp::DoGetList(const char* src_path, int list)
     this->lrt = 0;
     char* decoded = this->DecodePath(src_path);
     this->SendGetListInfoQuery(decoded);
+    if (decoded == 0) return 0;
+
     free(decoded);
     while (!this->lrt) Sleep(10);
     this->lrt = 0;
@@ -215,6 +220,7 @@ long long CMiniFtp::DoGetSize(const char* src_path)
     this->lrt = 0;
     char* decoded = this->DecodePath(src_path);
     this->SendGetFileInfoQuery(decoded);
+    if (decoded == 0) return 0;
     free(decoded);
     while (!this->lrt) Sleep(10);
     this->lrt = 0;
@@ -229,21 +235,23 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
     if (offset != 0) {
         this->ofs = *offset;
     }
+    char* decoded = this->DecodePath(src_path);
+    if (decoded == 0) return 0;
+
+    this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
+    free(decoded);
+
     int d = 0;
     this->buffer = (char*)malloc((size_t)blocksize);
-    if (this->buffer != 0) {
+    if (this->buffer == 0) return 0;
 
-        char* decoded = this->DecodePath(src_path);
-        this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
-        free(decoded);
-        while (!this->drt) Sleep(10);
-        //Send data
-        d = send(datafd, this->buffer, blocksize, 0);
-        this->ofs += d;
-        this->drt = 0;
+    while (!this->drt) Sleep(10);
+    //Send data
+    d = send(datafd, this->buffer, (int)blocksize, 0);
+    this->ofs += d;
+    this->drt = 0;
 
-        free(this->buffer);
-    }
+    free(this->buffer);
     return d;
 }
 
