@@ -36,7 +36,7 @@ wchar_t* EncodingConvert(const char* s) {
 }
 //url: "ftp://192.168.1.103:2121/"
 //file: "test.txt"
-HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char* file_name) {
+HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char** file_names, int count) {
     STRRET r = { 0 };
     HRESULT hr = S_OK;
     ULONG ret = 0, f = 0;
@@ -48,8 +48,9 @@ HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char* file_name) {
     SHFILEINFO sfi = { 0 };
     PITEMID_CHILD pc = 0;
     PIDLIST_ABSOLUTE pidl = 0;
+    wchar_t* w_file_name = 0;
+    
     wchar_t* w_url = EncodingConvert(url);
-    wchar_t* w_file_name = EncodingConvert(file_name);
     CMINVOKECOMMANDINFO cmd = { 0 };
     cmd.cbSize = sizeof(cmd);
     cmd.lpVerb = "copy";
@@ -64,14 +65,17 @@ HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char* file_name) {
         memset(&r, 0, sizeof(r));
         if (S_OK != (hr = ftp_root->GetDisplayNameOf(pc, SHGDN_NORMAL | SHGDN_FORPARSING, &r))) goto exit_me;
         BOOL done = FALSE;
-        if (strstr(r.cStr, "ftp://") != 0) {
-            done = strstr(r.cStr, file_name) != 0;
+        for (int i = 0; i < count; i++) {
+            w_file_name = EncodingConvert(file_names[i]);
+            if (strstr(r.cStr, "ftp://") != 0) {
+                done = strstr(r.cStr, file_names[i]) != 0;
+            }
+            else
+            {
+                done = wcsstr(r.pOleStr, w_file_name) != 0;
+            }
+            if (w_file_name != 0) free(w_file_name);
         }
-        else
-        {
-            done = wcsstr(r.pOleStr, w_file_name) != 0;
-        }
-
         if (done)
         {
             LPCITEMIDLIST b[] = { pc };
@@ -81,19 +85,21 @@ HRESULT FtpPutIntoClipboard(HWND hWnd, const char* url, const char* file_name) {
             context_menu->Release();
         }
     }
+
     hr = S_OK;
 
 exit_me:
     if (ftp_root != 0) ftp_root->Release();
     if (desktop != 0) desktop->Release();
     if (w_url != 0) free(w_url);
-    if (w_file_name != 0) free(w_file_name);
 
     return hr;
 }
 
 
 CMiniFtp CMiniFtp::Singleton;
+
+int CMiniFtp::MSWaitTimeOut = 3000;
 
 char* CMiniFtp::DoGetListCallback(const char* src_path, int list)
 {
@@ -113,28 +119,33 @@ int CMiniFtp::DoDownloadDataCallback(const char* src_path, SOCKET datafd, long l
 CMiniFtp::CMiniFtp()
     : rfs(-1LL)
     , ofs(0)
-    , drt(0)
     , buffer()
     , guid()
     , handle(INVALID_HANDLE_VALUE)
     , info_list()
+    , hEvent(INVALID_HANDLE_VALUE)
 {
     ::CoCreateGuid(&this->guid);
-
+    this->hEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
     SetGetDirListPtr(DoGetListCallback);
     SetGetFileSizePtr(DoGetSizeCallback);
     SetDownloadDataPtr(DoDownloadDataCallback);
 }
 
-int CMiniFtp::SetSourcePathIntoClipboard(const char* path)
+CMiniFtp::~CMiniFtp()
+{
+    if (this->hEvent != INVALID_HANDLE_VALUE) {
+        SetEvent(this->hEvent);
+        CloseHandle(this->hEvent);
+        this->hEvent = INVALID_HANDLE_VALUE;
+    }
+}
+
+int CMiniFtp::SetSourcePathIntoClipboard(const char** paths, int count)
 {
     int ret = 0;
-    char* ep = this->EncodePath(path);
-    if (ep == 0) return 0;
-
     //Call PutFtP
-    ret = FtpPutIntoClipboard(0, "ftp://127.0.0.1:8989/", ep);
-    free(ep);
+    ret = FtpPutIntoClipboard(0, "ftp://127.0.0.1:8989/", paths,count);
     
     return ret;
 }
@@ -184,12 +195,14 @@ void CMiniFtp::SetFtpCallback(IMiniFtpCallback* cb)
 int CMiniFtp::OnReceivedListInfo(const char* info_list, size_t count)
 {
     this->info_list = _strdup(info_list);
+    SetEvent(this->hEvent);
     return 0;
 }
 
 int CMiniFtp::OnReceivedFileInfo(const char* src_path, long long length)
 {
     this->rfs = length;
+    SetEvent(this->hEvent);
     return 0;
 }
 
@@ -197,33 +210,36 @@ int CMiniFtp::OnReceivedData(const char* buffer, long long length)
 {
     if (length <= sizeof(this->buffer)) {
         memcpy(this->buffer, buffer, (int)length);
-        this->drt = 1;
     }
+    SetEvent(this->hEvent);
     return 0;
 }
 
 char* CMiniFtp::DoGetList(const char* src_path, int list)
 {
-    this->lrt = 0;
     char* decoded = this->DecodePath(src_path);
-    this->SendGetListInfoQuery(decoded);
     if (decoded == 0) return 0;
+    this->SendGetListInfoQuery(decoded);
 
     free(decoded);
-    while (!this->lrt) Sleep(10);
-    this->lrt = 0;
+    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+    {
+        return 0;
+    }
+
     return this->info_list;
 }
 
 long long CMiniFtp::DoGetSize(const char* src_path)
 {
-    this->lrt = 0;
     char* decoded = this->DecodePath(src_path);
     this->SendGetFileInfoQuery(decoded);
     if (decoded == 0) return 0;
     free(decoded);
-    while (!this->lrt) Sleep(10);
-    this->lrt = 0;
+    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+    {
+        return -1LL;
+    }
     return this->rfs;
 }
 
@@ -231,7 +247,6 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
 {
     this->rfs = -1LL;
     this->ofs = 0LL;
-    this->drt = 0;
     if (offset != 0) {
         this->ofs = *offset;
     }
@@ -240,16 +255,20 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
 
     this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
     free(decoded);
-
+    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+    {
+        return -1;
+    }
     int d = 0;
     this->buffer = (char*)malloc((size_t)blocksize);
     if (this->buffer == 0) return 0;
-
-    while (!this->drt) Sleep(10);
+    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+    {
+        return -1;
+    }
     //Send data
     d = send(datafd, this->buffer, (int)blocksize, 0);
     this->ofs += d;
-    this->drt = 0;
 
     free(this->buffer);
     return d;

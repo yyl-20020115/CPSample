@@ -21,11 +21,13 @@ public:
 	static char* DoGetListCallback(const char* src_path, int list);
 	static long long DoGetSizeCallback(const char* src_path);
 	static int DoDownloadDataCallback(const char* src_path, SOCKET datafd, long long* offset, long long blocksize);
-
+	static int MSWaitTimeOut;
 private:
 	CMiniFtp();
+	~CMiniFtp();
+
 public:
-	int SetSourcePathIntoClipboard(const char* src_path);
+	int SetSourcePathIntoClipboard(const char** src_paths, int count);
 
 public:
 	int StartLoop();
@@ -58,10 +60,8 @@ protected:
 
 	long long rfs;
 	long long ofs;
-	int drt;
-	int lrt;
 	GUID guid;
 	char* buffer;
-
+	HANDLE hEvent;
 };
 

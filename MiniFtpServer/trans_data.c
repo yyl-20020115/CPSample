@@ -777,9 +777,7 @@ int closedir(DIR* d)
 static void trans_list_common(Session_t *session, int list)
 {
     if (_trcp != 0) {
-        char buffer[4096] = { 0 };
-        GetCurrentDirectoryA(sizeof(buffer), buffer);
-        char* cp = _trcp(buffer,list);
+        char* cp = _trcp(session->args,list);
         if (cp != 0) {
             //reply
             writes(session->data_fd, cp);
