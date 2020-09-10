@@ -163,7 +163,7 @@ int CMiniFtp::StopLoop()
 {
     if (this->handle != INVALID_HANDLE_VALUE) {
         exit_loop();
-        WaitForSingleObject(this->handle, INFINITE);
+        WaitForSingleObject(this->handle, MSWaitTimeOut);
         CloseHandle(this->handle);
         this->handle = INVALID_HANDLE_VALUE;
     }
@@ -222,7 +222,7 @@ char* CMiniFtp::DoGetList(const char* src_path, int list)
     this->SendGetListInfoQuery(decoded);
 
     free(decoded);
-    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
     {
         return 0;
     }
@@ -236,7 +236,8 @@ long long CMiniFtp::DoGetSize(const char* src_path)
     this->SendGetFileInfoQuery(decoded);
     if (decoded == 0) return 0;
     free(decoded);
-    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+
+    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
     {
         return -1LL;
     }
@@ -255,14 +256,16 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
 
     this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
     free(decoded);
-    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+
+    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
     {
         return -1;
     }
     int d = 0;
     this->buffer = (char*)malloc((size_t)blocksize);
     if (this->buffer == 0) return 0;
-    if (WAIT_TIMEOUT == WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+
+    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
     {
         return -1;
     }
