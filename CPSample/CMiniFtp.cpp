@@ -124,6 +124,7 @@ CMiniFtp::CMiniFtp()
     , handle(INVALID_HANDLE_VALUE)
     , info_list()
     , hEvent(INVALID_HANDLE_VALUE)
+    , bAsyncMode(true)
 {
     ::CoCreateGuid(&this->guid);
     this->hEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
@@ -191,18 +192,31 @@ void CMiniFtp::SetFtpCallback(IMiniFtpCallback* cb)
 {
     this->m_ftpcallback = cb;
 }
+bool CMiniFtp::GetAsyncMode()
+{
+    return this->bAsyncMode;
+}
+
+void CMiniFtp::SetAsyncMode(bool _async)
+{
+    this->bAsyncMode = _async;
+}
 
 int CMiniFtp::OnReceivedListInfo(const char* info_list, size_t count)
 {
     this->info_list = _strdup(info_list);
-    SetEvent(this->hEvent);
+    if (this->bAsyncMode) {
+        SetEvent(this->hEvent);
+    }
     return 0;
 }
 
 int CMiniFtp::OnReceivedFileInfo(const char* src_path, long long length)
 {
     this->rfs = length;
-    SetEvent(this->hEvent);
+    if (this->bAsyncMode) {
+        SetEvent(this->hEvent);
+    }
     return 0;
 }
 
@@ -211,35 +225,40 @@ int CMiniFtp::OnReceivedData(const char* buffer, long long length)
     if (length <= sizeof(this->buffer)) {
         memcpy(this->buffer, buffer, (int)length);
     }
-    SetEvent(this->hEvent);
+    if (this->bAsyncMode) {
+        SetEvent(this->hEvent);
+    }
     return 0;
 }
 
+
 char* CMiniFtp::DoGetList(const char* src_path, int list)
 {
-    char* decoded = this->DecodePath(src_path);
-    if (decoded == 0) return 0;
-    this->SendGetListInfoQuery(decoded);
+    //char* decoded = this->DecodePath(src_path);
+    //if (decoded == 0) return 0;
+    this->SendGetListInfoQuery(src_path);
 
-    free(decoded);
-    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
-    {
-        return 0;
+    //free(decoded);
+    if (this->bAsyncMode) {
+        if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+        {
+            return 0;
+        }
     }
-
     return this->info_list;
 }
 
 long long CMiniFtp::DoGetSize(const char* src_path)
 {
-    char* decoded = this->DecodePath(src_path);
-    this->SendGetFileInfoQuery(decoded);
-    if (decoded == 0) return 0;
-    free(decoded);
-
-    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
-    {
-        return -1LL;
+    //char* decoded = this->DecodePath(src_path);
+    this->SendGetFileInfoQuery(src_path);
+    //if (decoded == 0) return 0;
+    //free(decoded);
+    if (this->bAsyncMode) {
+        if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+        {
+            return -1LL;
+        }
     }
     return this->rfs;
 }
@@ -251,23 +270,27 @@ int CMiniFtp::DoDownloadData(const char* src_path, SOCKET datafd, long long* off
     if (offset != 0) {
         this->ofs = *offset;
     }
-    char* decoded = this->DecodePath(src_path);
-    if (decoded == 0) return 0;
+    //char* decoded = this->DecodePath(src_path);
+    //if (decoded == 0) return 0;
 
-    this->SendGetDataInfoQuery(decoded, this->ofs, blocksize);
-    free(decoded);
+    this->SendGetDataInfoQuery(src_path, this->ofs, blocksize);
+    //free(decoded);
 
-    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
-    {
-        return -1;
+    if (this->bAsyncMode) {
+        if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+        {
+            return -1;
+        }
     }
     int d = 0;
     this->buffer = (char*)malloc((size_t)blocksize);
     if (this->buffer == 0) return 0;
+    if (this->bAsyncMode) {
 
-    if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
-    {
-        return -1;
+        if (WAIT_OBJECT_0 != WaitForSingleObject(this->hEvent, MSWaitTimeOut))
+        {
+            return -1;
+        }
     }
     //Send data
     d = send(datafd, this->buffer, (int)blocksize, 0);

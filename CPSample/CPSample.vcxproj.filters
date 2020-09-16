@@ -30,12 +30,18 @@
     <ClInclude Include="CMiniFtp.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="CMessageThread.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CPSample.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="CMiniFtp.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="CMessageThread.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

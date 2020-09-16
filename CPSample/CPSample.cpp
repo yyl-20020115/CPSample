@@ -47,7 +47,7 @@ void WriteAllToFile(const char* path, const char* message) {
     }
 }
 
-
+#include "CMessageThread.h"
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
                      _In_ LPWSTR    lpCmdLine,
@@ -57,7 +57,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     
+    CMessageThread::Singleton.Start();
 
+    for (int i = 0; i < 5; i++) {
+        Sleep(1000);
+    }
+    CMessageThread::Singleton.Stop();
 
 
 #if 1

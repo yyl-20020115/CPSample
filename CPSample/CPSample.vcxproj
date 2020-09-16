@@ -151,6 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CMessageThread.h" />
     <ClInclude Include="CMiniFtp.h" />
     <ClInclude Include="CPSample.h" />
     <ClInclude Include="framework.h" />
@@ -158,6 +159,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CMessageThread.cpp" />
     <ClCompile Include="CMiniFtp.cpp" />
     <ClCompile Include="CPSample.cpp" />
   </ItemGroup>

@@ -45,6 +45,11 @@ public:
 	int OnReceivedListInfo(const char* info_list, size_t count);
 	int OnReceivedFileInfo(const char* src_path, long long length);
 	int OnReceivedData(const char* buffer, long long length);
+public:
+
+	bool GetAsyncMode();
+	void SetAsyncMode(bool asyncMode);
+
 protected:
 	//caller will free result list
 	char* DoGetList(const char* src_path, int list);
@@ -63,5 +68,6 @@ protected:
 	GUID guid;
 	char* buffer;
 	HANDLE hEvent;
+	bool bAsyncMode;
 };
 
