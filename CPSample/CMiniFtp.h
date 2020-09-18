@@ -27,7 +27,7 @@ private:
 	~CMiniFtp();
 
 public:
-	int SetSourcePathIntoClipboard(const char** src_paths, int count);
+	int SetSourcePathIntoClipboard(const wchar_t** src_paths, int count);
 
 public:
 	int StartLoop();
@@ -65,6 +65,7 @@ protected:
 
 	long long rfs;
 	long long ofs;
+	long long blocksize;
 	GUID guid;
 	char* buffer;
 	HANDLE hEvent;

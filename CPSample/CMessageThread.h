@@ -26,6 +26,10 @@ public:
 
     BOOL Stop();
 
+public:
+
+    void Signal();
+
 protected:
 
     HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
@@ -37,6 +41,7 @@ protected:
 protected:
     BOOL bStarted;
     HANDLE hThread;
+    HANDLE hEvent;
     HWND hWnd;
 };
 

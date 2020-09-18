@@ -57,13 +57,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(lpCmdLine);
 
     
-    CMessageThread::Singleton.Start();
-
-    for (int i = 0; i < 5; i++) {
-        Sleep(1000);
-    }
-    CMessageThread::Singleton.Stop();
-
+    
+    //for (int i = 0; i < 5; i++) {
+    //    Sleep(1000);
+    //}
+    
 
 #if 1
     if (S_OK != OleInitialize(0)) return -1;
@@ -84,6 +82,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         return FALSE;
     }
 
+    CMessageThread::Singleton.Start();
+
+
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_CPSAMPLE));
 
     MSG msg;
@@ -96,6 +97,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
             DispatchMessage(&msg);
         }
     }
+    
+    CMessageThread::Singleton.Stop();
+
 
 #if 1
     StopSocket();
@@ -153,6 +157,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  WM_DESTROY  - 发送退出消息并返回
 //
 //
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
@@ -164,9 +169,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             switch (wmId)
             {
             case IDM_ABOUT:
-#if 1
-//                FtpPutIntoClipboard(hWnd,"ftp://127.0.0.1:8989/","sample.txt");
-#endif
+                CMessageThread::Singleton.Signal();
                 break;
             case IDM_EXIT:
                 DestroyWindow(hWnd);

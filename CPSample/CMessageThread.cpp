@@ -1,5 +1,6 @@
 #include "CMessageThread.h"
 #include <tchar.h>
+HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t** file_names, int count);
 
 CMessageThread CMessageThread::Singleton;
 
@@ -55,13 +56,19 @@ HWND CMessageThread::InitInstance(HINSTANCE hInstance, int nCmdShow)
 CMessageThread::CMessageThread()
     : hThread(INVALID_HANDLE_VALUE)
     , bStarted(FALSE)
+    , hEvent(INVALID_HANDLE_VALUE)
     , hWnd(NULL)
 {
-
+    this->hEvent = ::CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
 CMessageThread::~CMessageThread()
 {
+    if (this->hEvent != INVALID_HANDLE_VALUE) {
+        //::SetEvent(this->hEvent);
+        CloseHandle(this->hEvent);
+        this->hEvent = INVALID_HANDLE_VALUE;
+    }
     this->Stop();
 }
 
@@ -91,22 +98,52 @@ BOOL CMessageThread::Stop()
     return !this->bStarted;
 }
 
+void CMessageThread::Signal()
+{
+    if (this->hEvent != INVALID_HANDLE_VALUE) {
+        ::SetEvent(this->hEvent);
+    }
+}
+
 
 
 int CMessageThread::Loop(LPVOID parameter)
 {
+    HRESULT hr = OleInitialize(0);
+    if (hr != S_OK) return -1;
     this->bStarted = TRUE;
     this->hWnd = this->InitInstance(GetModuleHandle(NULL), SW_HIDE);
 
     MSG msg = { 0 };
-
-    while (GetMessage(&msg, this->hWnd, 0, 0))
+    HANDLE handles[] = {this->hEvent};
+    while (true)
     {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+        DWORD r = MsgWaitForMultipleObjects(1, handles, FALSE, 100, QS_ALLEVENTS);
+
+        if (r == WAIT_OBJECT_0) {
+
+
+
+            const wchar_t* ss[] = { L"sample1.txt",L"sample2.txt" };
+            FtpPutIntoClipboard(hWnd, L"ftp://127.0.0.1/", ss, 2);
+            ::ResetEvent(this->hEvent);
+        }
+        else if (r == WAIT_OBJECT_0 + 1){
+            if (GetMessage(&msg, 0, 0, 0))
+            {
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+            else {
+                break;
+            }
+        }
     }
 
+
+    DestroyWindow(this->hWnd);
     this->bStarted = FALSE;
+    OleUninitialize();
     return 0;
 }
 
@@ -119,7 +156,6 @@ LRESULT CMessageThread::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     break;
     case WM_COPY:
     {
-
     }
     break;
     case WM_PASTE:
