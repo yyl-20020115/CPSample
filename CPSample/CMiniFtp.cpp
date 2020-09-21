@@ -146,9 +146,9 @@ char* EncodingConvertU2M(const wchar_t* ws) {
     return cs;
 }
 
-HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t* source_id, const wchar_t** file_names, int count) {
+HRESULT FtpPutIntoClipboardWithSource(HWND hWnd, const wchar_t* url, const wchar_t* source_id, const wchar_t** file_names, int count) {
 
-    int n = RemoveCachedItems(url);
+    //int n = RemoveCachedItems(url);
     
     STRRET r = { 0 };
     HRESULT hr = S_OK;
@@ -267,6 +267,118 @@ exit_me:
     return hr;
 }
 
+HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t** file_names, int count) {
+
+    //int n = RemoveCachedItems(url);
+
+    STRRET r = { 0 };
+    HRESULT hr = S_OK;
+    ULONG ret = 0, f = 0;
+    IShellFolder* desktop = 0;
+    IShellFolder* ftp_root = 0;
+    IShellView* ftp_view = 0;
+    IContextMenu* item_context_menu = 0;
+    IEnumIDList* pl = 0;
+    SHFILEINFO sfi = { 0 };
+    PITEMID_CHILD pc = 0;
+    PIDLIST_ABSOLUTE pidl = 0;
+
+
+    CMINVOKECOMMANDINFO cmd = { 0 };
+    cmd.cbSize = sizeof(cmd);
+    //cmd.fMask = CMIC_MASK_ASYNCOK;
+    cmd.lpVerb = "copy";
+    //NOTICE: this is used for clear cache (so that each time we can reload list from ftp server)
+    SFGAOF u = SFGAO_VALIDATE;
+    int ppc_index = 0;
+    LPCITEMIDLIST* ppcs = new LPCITEMIDLIST[count];
+
+    if (S_OK != (hr = SHGetDesktopFolder(&desktop))) goto exit_me;
+    if (S_OK != (hr = SHParseDisplayName(url, NULL, &pidl, SFGAO_FOLDER, &ret))) goto exit_me;
+    if (S_OK != (hr = desktop->BindToObject(pidl, 0, IID_IShellFolder, (void**)&ftp_root))) goto exit_me;
+    if (S_OK != (hr = ftp_root->GetAttributesOf(0, 0, &u))) goto exit_me;
+    if (S_OK != (hr = ftp_root->CreateViewObject(hWnd, IID_IShellView, (void**)&ftp_view))) goto exit_me;
+
+    if (S_OK != (hr = ftp_root->EnumObjects(hWnd, SHCONTF_NONFOLDERS | SHCONTF_FOLDERS, &pl))) goto exit_me;
+
+    while (S_OK == (hr = pl->Next(1, &pc, &f)))
+    {
+        memset(&r, 0, sizeof(r));
+        if (S_OK != (hr = ftp_root->GetDisplayNameOf(pc, SHGDN_NORMAL | SHGDN_FORPARSING, &r))) goto exit_me;
+        BOOL done = FALSE;
+        for (int i = 0; i < count; i++) {
+            char* fn = EncodingConvertU2M(file_names[i]);
+            //for xp, they use cStr instead of pOleStr
+            if (fn != 0 && strstr(r.cStr, "ftp://") != 0) {
+                done = strstr(r.cStr, fn) != 0;
+            }
+            else
+            {
+                done = wcsstr(r.pOleStr, file_names[i]) != 0;
+            }
+            if (fn != 0) {
+                free(fn);
+            }
+            if (done) break;
+        }
+        if (done)
+        {
+            ppcs[ppc_index++] = pc;
+        }
+    }
+    if (ppc_index > 0) {
+        if (S_OK != (hr = ftp_root->GetUIObjectOf(
+            hWnd, ppc_index, ppcs, IID_IContextMenu, NULL, (void**)&item_context_menu))) goto exit_me;
+        if (S_OK != (hr = ftp_root->GetAttributesOf(ppc_index, ppcs, &u))) goto exit_me;
+        if (S_OK != (hr = item_context_menu->InvokeCommand(&cmd))) goto exit_me;
+
+        hr = S_OK;
+    }
+    else
+    {
+        hr = E_FAIL;
+    }
+exit_me:
+    if (item_context_menu != 0) item_context_menu->Release();
+    if (pl != 0) pl->Release();
+    if (ftp_view != 0) ftp_view->Release();
+    if (ftp_root != 0) ftp_root->Release();
+    if (desktop != 0) desktop->Release();
+    if (ppcs != 0) delete[] ppcs;
+
+    return hr;
+}
+//xp-win7: put should be in main thread, win8+ can be in other threads
+BOOL Is_Win8_or_Later() //win8:6.2
+{
+    OSVERSIONINFOEX osvi;
+    DWORDLONG dwlConditionMask = 0;
+    int op = VER_GREATER_EQUAL;
+
+    // Initialize the OSVERSIONINFOEX structure.
+
+    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+    osvi.dwMajorVersion = 6;
+    osvi.dwMinorVersion = 2;
+    osvi.wServicePackMajor = 0;
+    osvi.wServicePackMinor = 0;
+
+    // Initialize the condition mask.
+
+    VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_SERVICEPACKMAJOR, op);
+    VER_SET_CONDITION(dwlConditionMask, VER_SERVICEPACKMINOR, op);
+
+    // Perform the test.
+
+    return VerifyVersionInfo(&osvi,
+        VER_MAJORVERSION | VER_MINORVERSION |
+        VER_SERVICEPACKMAJOR | VER_SERVICEPACKMINOR,
+        dwlConditionMask);
+}
+
 
 CMiniFtp CMiniFtp::Singleton;
 
@@ -316,7 +428,7 @@ CMiniFtp::~CMiniFtp()
 
 int CMiniFtp::SetSourcePathIntoClipboard(const wchar_t* machine_id, const wchar_t** paths, int count)
 {
-    return FtpPutIntoClipboard(0, L"ftp://127.0.0.1:8989/", machine_id, paths,count);
+    return FtpPutIntoClipboardWithSource(0, L"ftp://127.0.0.1:8989/", machine_id, paths,count);
 }
 
 int CMiniFtp::StartLoop()

@@ -1,6 +1,6 @@
 #include "CMessageThread.h"
 #include <tchar.h>
-HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t* source_id, const wchar_t** file_names, int count);
+HRESULT FtpPutIntoClipboardWithSource(HWND hWnd, const wchar_t* url, const wchar_t* source_id, const wchar_t** file_names, int count);
 
 CMessageThread CMessageThread::Singleton;
 
@@ -123,7 +123,7 @@ int CMessageThread::Loop(LPVOID parameter)
         if (r == WAIT_OBJECT_0) {
 
             const wchar_t* ss[] = { L"sample1.txt",L"sample2.txt" };
-            FtpPutIntoClipboard(hWnd, L"ftp://127.0.0.1/",L"winxp", ss, 2);
+            FtpPutIntoClipboardWithSource(hWnd, L"ftp://127.0.0.1/",L"winxp", ss, 2);
             ::ResetEvent(this->hEvent);
         }
         else if (r == WAIT_OBJECT_0 + 1){
