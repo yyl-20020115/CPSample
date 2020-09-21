@@ -146,7 +146,7 @@ char* EncodingConvertU2M(const wchar_t* ws) {
     return cs;
 }
 
-HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t** file_names, int count) {
+HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t* source_id, const wchar_t** file_names, int count) {
 
     int n = RemoveCachedItems(url);
     
@@ -154,15 +154,17 @@ HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t** file_
     HRESULT hr = S_OK;
     ULONG ret = 0, f = 0;
     IShellFolder* desktop = 0;
-    IDataObject* fo = 0;
     IShellFolder* ftp_root = 0;
+    IShellFolder* source_root = 0;
     IShellView* ftp_view = 0;
     IContextMenu* item_context_menu = 0;
     IEnumIDList* pl = 0;
     SHFILEINFO sfi = { 0 };
     PITEMID_CHILD pc = 0;
     PIDLIST_ABSOLUTE pidl = 0;
-    
+    IEnumIDList* plv = 0;
+    PITEMID_CHILD pcv = 0;
+
 
     CMINVOKECOMMANDINFO cmd = { 0 };
     cmd.cbSize = sizeof(cmd);
@@ -183,41 +185,80 @@ HRESULT FtpPutIntoClipboard(HWND hWnd, const wchar_t* url, const wchar_t** file_
     while (S_OK == (hr = pl->Next(1, &pc, &f)))
     {
         memset(&r, 0, sizeof(r));
+
         if (S_OK != (hr = ftp_root->GetDisplayNameOf(pc, SHGDN_NORMAL | SHGDN_FORPARSING, &r))) goto exit_me;
-        BOOL done = FALSE;
-        for (int i = 0; i < count; i++) {
-            char* fn = EncodingConvertU2M(file_names[i]);
-            //for xp, they use cStr instead of pOleStr
-            if (fn!=0 && strstr(r.cStr, "ftp://") != 0) {
-                done = strstr(r.cStr, fn) != 0;
+
+        bool xpmode = false;
+        bool found = false;
+
+        char* fs = EncodingConvertU2M(source_id);
+        //for xp, they use cStr instead of pOleStr
+        if (fs != 0 && strstr(r.cStr, "ftp://") != 0) {
+            found = strstr(r.cStr, fs) != 0;
+            xpmode = true;
+        }
+        else
+        {
+            found = wcsstr(r.pOleStr, source_id) != 0;
+            xpmode = false;
+        }
+        if (fs != 0) {
+            free(fs);
+        }
+        //source_id found
+        if (found)
+        {
+            if (S_OK != (hr = ftp_root->BindToObject(pc, 0, IID_IShellFolder, (void**)&source_root))) goto exit_me;
+            if (S_OK != (hr = source_root->GetAttributesOf(1, (LPCITEMIDLIST*)&pc, &u))) goto exit_me;
+            if (S_OK != (hr = source_root->EnumObjects(hWnd, SHCONTF_NONFOLDERS | SHCONTF_FOLDERS, &plv))) goto exit_me;
+
+            while (S_OK == (hr = plv->Next(1, &pcv, &f)))
+            {
+                bool done = false;
+                memset(&r, 0, sizeof(r));
+
+                if (S_OK != (hr = source_root->GetDisplayNameOf(pcv, SHGDN_INFOLDER| SHGDN_FORPARSING, &r))) goto exit_me;
+
+                for (int i = 0; i < count; i++) {
+                    char* fn = EncodingConvertU2M(file_names[i]);
+                    //for xp, they use cStr instead of pOleStr
+                    if (xpmode) {
+                        done = strstr(r.cStr, fn) != 0;
+                    }
+                    else
+                    {
+                        done = wcsstr(r.pOleStr, file_names[i]) != 0;
+                    }
+                    if (fn != 0) {
+                        free(fn);
+                    }
+                    if (done) break;
+                }
+                if (done)
+                {
+                    ppcs[ppc_index++] = pcv;
+                }
+            }
+            if (ppc_index > 0) {
+                if (S_OK != (hr = source_root->GetAttributesOf(ppc_index, ppcs, &u))) goto exit_me;
+                if (S_OK != (hr = source_root->GetUIObjectOf(
+                    hWnd, ppc_index, ppcs, IID_IContextMenu, NULL, (void**)&item_context_menu))) goto exit_me;
+                if (S_OK != (hr = item_context_menu->InvokeCommand(&cmd))) goto exit_me;
+
+                hr = S_OK;
             }
             else
             {
-                done = wcsstr(r.pOleStr, file_names[i]) != 0;
+                hr = E_FAIL;
             }
-            if (fn != 0) {
-                free(fn);
-            }
-            if (done) break;
+            break;
         }
-        if (done)
-        {
-            ppcs[ppc_index++] = pc;
-        }
-    }
-    if (ppc_index > 0) {
-        if (S_OK != (hr = ftp_root->GetUIObjectOf(
-            hWnd, ppc_index, ppcs, IID_IContextMenu, NULL, (void**)&item_context_menu))) goto exit_me;
-        if (S_OK != (hr = item_context_menu->InvokeCommand(&cmd))) goto exit_me;
-        item_context_menu->Release();
-
-        hr = S_OK;
-    }
-    else
-    {
-        hr = E_FAIL;
     }
 exit_me:
+    if (item_context_menu!=0) item_context_menu->Release();
+    if (plv != 0) plv->Release();
+    if (source_root != 0) source_root->Release();
+    if (pl != 0) pl->Release();
     if (ftp_view != 0) ftp_view->Release();
     if (ftp_root != 0) ftp_root->Release();
     if (desktop != 0) desktop->Release();
@@ -273,9 +314,9 @@ CMiniFtp::~CMiniFtp()
     }
 }
 
-int CMiniFtp::SetSourcePathIntoClipboard(const wchar_t** paths, int count)
+int CMiniFtp::SetSourcePathIntoClipboard(const wchar_t* machine_id, const wchar_t** paths, int count)
 {
-    return FtpPutIntoClipboard(0, L"ftp://127.0.0.1:8989/", paths,count);
+    return FtpPutIntoClipboard(0, L"ftp://127.0.0.1:8989/", machine_id, paths,count);
 }
 
 int CMiniFtp::StartLoop()

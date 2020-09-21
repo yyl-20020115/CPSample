@@ -30,6 +30,7 @@ int do_rmd(Session_t * session);
 int do_dele(Session_t * session);
 int do_rnfr(Session_t * session);
 int do_rnto(Session_t * session);
+int do_opts(Session_t * session);
 int do_site(Session_t * session);
 int do_syst(Session_t * session);
 int do_feat(Session_t * session);

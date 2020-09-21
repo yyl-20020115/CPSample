@@ -27,7 +27,7 @@ private:
 	~CMiniFtp();
 
 public:
-	int SetSourcePathIntoClipboard(const wchar_t** src_paths, int count);
+	int SetSourcePathIntoClipboard(const wchar_t* machine_id, const wchar_t** src_paths, int count);
 
 public:
 	int StartLoop();

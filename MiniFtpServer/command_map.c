@@ -51,6 +51,7 @@ static ftpcmd_t ftp_cmds[] = {
     {"RNTO", do_rnto },
     {"SITE", do_site },
     {"SYST", do_syst },
+    {"OPTS", do_opts },
     {"FEAT", do_feat },
     {"SIZE", do_size },
     {"STAT", do_stat },
@@ -105,6 +106,13 @@ void ftp_lreply(Session_t* session, int status, const char* text)
     _snprintf(_text, sizeof(_text), "%d-%s\r\n", status, text);
     log("log.txt", _text);
     writes(session->peer_fd, _text);
+}
+int do_opts(Session_t* session) {
+    if (_stricmp(session->args, "utf8 on") == 0)
+    {
+        ftp_reply(session, FTP_OPTSOK, "OPTS UTF8 command successful - UTF8 encoding now ON.");
+    }
+    return EXIT_SUCCESS;
 }
 
 int do_user(Session_t* session)
